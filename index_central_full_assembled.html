@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZPRINT Filename Generator (Central WO)</title>
+
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#f4f4f4;padding:24px}
+.container{max-width:780px;margin:auto;background:#fff;padding:22px;border-radius:12px;
+box-shadow:0px 4px 14px rgba(0,0,0,0.12)}
+h2{text-align:center;margin-bottom:20px}
+label{font-weight:600;margin-top:12px;display:block}
+input,select{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #ccc}
+button{width:100%;padding:12px;margin-top:16px;border:none;border-radius:8px;background:#0077cc;
+color:white;font-size:18px;cursor:pointer}
+button:hover{background:#005fa3}
+.output{margin-top:20px;padding:15px;background:#eef7ff;border-left:4px solid #0077cc;
+font-size:18px;display:none;word-break:break-all}
+.row{display:flex;gap:12px;margin-top:12px}
+.btn-small{padding:10px 14px;border-radius:8px;border:none;cursor:pointer;color:white}
+.copy{background:#28a745}
+.download{background:#444}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h2>ZPRINT Filename Generator — Central WO</h2>
+
+<label>Date (auto)</label>
+<input id="dateField" readonly />
+
+<label>Category</label>
+<select id="category">
+<option>-- select --</option>
+<option>PVC</option><option>Embroidery</option><option>Fabric</option>
+<option>Banner</option><option>Map</option><option>Sublimation</option>
+<option>DTF</option><option>POP</option><option>Contravision</option>
+<option>ClearSticker</option><option>Stand Banner</option>
+<option>Tear Drop</option><option>Telescope</option><option>Flatbed</option>
+<option value="CUSTOM">Custom Input</option>
+</select>
+
+<input id="customCategory" placeholder="Custom category" style="display:none" />
+
+<label>Subcategory</label>
+<select id="subcategory"><option>-- select --</option></select>
+<input id="customSub" placeholder="Custom subcategory" style="display:none" />
+
+<label>Client (no spaces)</label>
+<input id="client" placeholder="AliJuma"/>
+
+<label>Description</label>
+<input id="description" placeholder="StickerA3"/>
+
+<label>Version</label>
+<input id="version" placeholder="V01"/>
+
+<button id="generateBtn">Generate Filename</button>
+
+<div id="output" class="output"></div>
+
+<div class="row">
+<button id="copyBtn" class="btn-small copy" style="display:none;">Copy</button>
+<button id="downloadBtn" class="btn-small download" style="display:none;">Download</button>
+</div>
+</div>
+
+<script>
+/* PART 2 — UI LOGIC */
+
+const SUBS = {
+"PVC":["Sticker","Print&Cut","Print&Cut UV","UV","Custom Input"],
+"Embroidery":["Standard","Logo","Names","Custom Input"],
+"Fabric":["Cotton","Poly","Flex","Custom Input"],
+"Banner":["Blockout","Backlight","UV","Custom Input"],
+"Map":["Normal","PP","POP","Custom Input"],
+"Sublimation":["Mug","Plate","Cloth","Custom Input"],
+"DTF":["Custom Input"],
+"POP":["UV","Shelf Talker","Dangler","Wobbler","Custom Input"],
+"Contravision":["UV","Custom Input"],
+"ClearSticker":["Print&Cut","UV","Custom Input"],
+"Stand Banner":["Standard","Premium","Custom Input"],
+"Tear Drop":["Small","Medium","Large","Custom Input"],
+"Telescope":["Small","Medium","Large","Custom Input"],
+"Flatbed":["UV_DTF","Pen","Keyholder","Acrylic","Custom Input"]
+};
+
+function updateDate(){
+ const d=new Date();
+ const yy=String(d.getFullYear()).slice(-2);
+ const mm=String(d.getMonth()+1).padStart(2,'0');
+ const dd=String(d.getDate()).padStart(2,'0');
+ document.getElementById('dateField').value = yy+mm+dd;
+}
+updateDate();
+
+const category=document.getElementById('category');
+const sub=document.getElementById('subcategory');
+
+category.addEventListener('change',()=>{
+ let c=category.value;
+ document.getElementById('customCategory').style.display = c==='CUSTOM'?'block':'none';
+ sub.innerHTML='';
+ if(SUBS[c]){
+   SUBS[c].forEach(s=>{let o=document.createElement('option');o.value=s;o.textContent=s;sub.appendChild(o);});
+   sub.appendChild(new Option('Custom Input','CUSTOM'));
+ } else {
+   sub.appendChild(new Option('-- select --',''));
+   sub.appendChild(new Option('Custom Input','CUSTOM'));
+ }
+});
+
+sub.addEventListener('change',()=>{
+ document.getElementById('customSub').style.display = sub.value==='CUSTOM'?'block':'none';
+});
+
+// WO endpoint
+const WO_ENDPOINT = "https://script.google.com/macros/s/AKfycbxo7NgzyZlaNz1RZLr-hcW2FK-2hBHfoblTefeoe3kYlajnQE6ErotlKIgyyqEiI9lW4Q/exec";
+
+async function fetchNextWO(){
+ try{
+   let r=await fetch(WO_ENDPOINT+'?action=next',{cache:'no-store'});
+   if(!r.ok) throw new Error();
+   let j=await r.json();
+   return j.nextWO;
+ }catch(e){
+   return getLocalWO();
+ }
+}
+
+function getLocalWO(){
+ let y=new Date().getFullYear();
+ let d=JSON.parse(localStorage.getItem('zprint_wo'))||{};
+ if(d.year!==y){d.year=y;d.counter=1;}
+ let w=d.counter;
+ d.counter++;
+ localStorage.setItem('zprint_wo',JSON.stringify(d));
+ return "W"+String(w).padStart(3,'0');
+}
+
+/* PART 3 — FILENAME GENERATOR */
+
+document.getElementById("generateBtn").addEventListener("click", async () => {
+
+  const catSel =
+    category.value === "CUSTOM"
+      ? document.getElementById("customCategory").value.trim()
+      : category.value;
+
+  const subSel =
+    sub.value === "CUSTOM"
+      ? document.getElementById("customSub").value.trim()
+      : sub.value;
+
+  const client = document.getElementById("client").value.trim().replace(/\s+/g, "_");
+  const desc = document.getElementById("description").value.trim().replace(/\s+/g, "_");
+  const ver = document.getElementById("version").value.trim().toUpperCase();
+  const date = document.getElementById("dateField").value;
+
+  if (!catSel || !subSel || !client || !desc || !ver) {
+    alert("Please fill in all fields.");
+    return;
+  }
+
+  const wo = await fetchNextWO();
+  const filename =
+    `${wo}_${date}_${catSel}_${subSel}_${client}_${desc}_${ver}`
+      .toUpperCase()
+      .replace(/\s+/g, "_");
+
+  const out = document.getElementById("output");
+  out.style.display = "block";
+  out.textContent = filename;
+
+  document.getElementById("copyBtn").style.display = "inline-block";
+  document.getElementById("downloadBtn").style.display = "inline-block";
+});
+
+document.getElementById("copyBtn").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("output").textContent);
+  alert("Filename copied!");
+});
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  const text = document.getElementById("output").textContent;
+  const blob = new Blob([text], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = text + ".txt";
+  a.click();
+});
+</script>
+
+</body>
+</html>
